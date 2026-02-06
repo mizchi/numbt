@@ -1,0 +1,19 @@
+{
+  "name": "mizchi/numbt",
+  "version": "0.1.0",
+  "deps": {
+    "mizchi/blas": "0.1.0"
+  },
+  "readme": "README.md",
+  "repository": "https://github.com/mizchi/numbt",
+  "license": "Apache-2.0",
+  "keywords": [
+    "numpy",
+    "numerical",
+    "blas",
+    "matrix"
+  ],
+  "description": "NumPy-style numerical computing library for MoonBit",
+  "source": "src",
+  "preferred-target": "native"
+}
