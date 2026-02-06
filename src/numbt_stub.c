@@ -1,5 +1,6 @@
-// numbt native acceleration using Apple Accelerate framework
-// Provides optimized sort, exp, outer product, LAPACK, and random operations
+// numbt native acceleration using BLAS/LAPACK
+// macOS: Apple Accelerate framework
+// Linux: OpenBLAS + LAPACK
 
 #include <stdint.h>
 #include <string.h>
@@ -10,6 +11,18 @@
 #ifdef __APPLE__
   #define ACCELERATE_NEW_LAPACK
   #include <Accelerate/Accelerate.h>
+#else
+  #include <cblas.h>
+  // LAPACK function declarations (Fortran interface)
+  extern void sgetrf_(int* m, int* n, float* a, int* lda, int* ipiv, int* info);
+  extern void sgetri_(int* n, float* a, int* lda, int* ipiv, float* work, int* lwork, int* info);
+  extern void sgesv_(int* n, int* nrhs, float* a, int* lda, int* ipiv, float* b, int* ldb, int* info);
+  extern void sgesvd_(char* jobu, char* jobvt, int* m, int* n, float* a, int* lda, float* s, float* u, int* ldu, float* vt, int* ldvt, float* work, int* lwork, int* info);
+  extern void ssyev_(char* jobz, char* uplo, int* n, float* a, int* lda, float* w, float* work, int* lwork, int* info);
+  extern void spotrf_(char* uplo, int* n, float* a, int* lda, int* info);
+  extern void sgeqrf_(int* m, int* n, float* a, int* lda, float* tau, float* work, int* lwork, int* info);
+  extern void sorgqr_(int* m, int* n, int* k, float* a, int* lda, float* tau, float* work, int* lwork, int* info);
+  extern void sgels_(char* trans, int* m, int* n, int* nrhs, float* a, int* lda, float* b, int* ldb, float* work, int* lwork, int* info);
 #endif
 
 typedef uint8_t *moonbit_bytes_t;
@@ -24,28 +37,50 @@ static void ensure_random_init(void) {
 }
 
 // ============================================================================
-// Optimized sort using vDSP
+// Optimized sort using vDSP (Apple) or qsort (Linux)
 // ============================================================================
+
+static int float_cmp_asc(const void* a, const void* b) {
+  float fa = *(const float*)a;
+  float fb = *(const float*)b;
+  return (fa > fb) - (fa < fb);
+}
+
+static int float_cmp_desc(const void* a, const void* b) {
+  float fa = *(const float*)a;
+  float fb = *(const float*)b;
+  return (fb > fa) - (fb < fa);
+}
 
 void numbt_vsort_asc(moonbit_bytes_t data, int n) {
 #ifdef __APPLE__
   vDSP_vsort((float*)data, (vDSP_Length)n, 1);  // 1 = ascending
+#else
+  qsort((float*)data, n, sizeof(float), float_cmp_asc);
 #endif
 }
 
 void numbt_vsort_desc(moonbit_bytes_t data, int n) {
 #ifdef __APPLE__
   vDSP_vsort((float*)data, (vDSP_Length)n, -1);  // -1 = descending
+#else
+  qsort((float*)data, n, sizeof(float), float_cmp_desc);
 #endif
 }
 
 // ============================================================================
-// Optimized exp using vForce
+// Optimized exp using vForce (Apple) or loop (Linux)
 // ============================================================================
 
 void numbt_vexp(moonbit_bytes_t src, moonbit_bytes_t dst, int n) {
 #ifdef __APPLE__
   vvexpf((float*)dst, (const float*)src, &n);
+#else
+  float* fsrc = (float*)src;
+  float* fdst = (float*)dst;
+  for (int i = 0; i < n; i++) {
+    fdst[i] = expf(fsrc[i]);
+  }
 #endif
 }
 
@@ -54,13 +89,11 @@ void numbt_vexp(moonbit_bytes_t src, moonbit_bytes_t dst, int n) {
 // ============================================================================
 
 void numbt_outer(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int m, int n) {
-#ifdef __APPLE__
   // out = a * b^T (rank-1 update)
   // Initialize out to zero first
   memset(out, 0, m * n * sizeof(float));
   // sger: A := alpha * x * y^T + A
   cblas_sger(CblasRowMajor, m, n, 1.0f, (float*)a, 1, (float*)b, 1, (float*)out, n);
-#endif
 }
 
 // ============================================================================
@@ -68,11 +101,9 @@ void numbt_outer(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int 
 // ============================================================================
 
 void numbt_sgemm(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t c, int m, int n, int k) {
-#ifdef __APPLE__
   // C = A @ B, where A is m x k, B is k x n, C is m x n (row-major)
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
     m, n, k, 1.0f, (float*)a, k, (float*)b, n, 0.0f, (float*)c, n);
-#endif
 }
 
 // ============================================================================
@@ -127,7 +158,6 @@ void numbt_shuffle_indices(int* indices, int n) {
 // Matrix inverse: A^-1
 // Returns 0 on success, non-zero on failure (singular matrix)
 int numbt_inv(moonbit_bytes_t a, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   int* ipiv = (int*)malloc(n * sizeof(int));
   if (!ipiv) return -1;
@@ -156,9 +186,6 @@ int numbt_inv(moonbit_bytes_t a, int n) {
   free(work);
   free(ipiv);
   return info;
-#else
-  return -1;
-#endif
 }
 
 // Solve linear system: A @ x = b
@@ -166,7 +193,6 @@ int numbt_inv(moonbit_bytes_t a, int n) {
 // On output: b contains x
 // Returns 0 on success
 int numbt_solve(moonbit_bytes_t a, moonbit_bytes_t b, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   float* B = (float*)b;
   int* ipiv = (int*)malloc(n * sizeof(int));
@@ -191,9 +217,6 @@ int numbt_solve(moonbit_bytes_t a, moonbit_bytes_t b, int n) {
 
   free(ipiv);
   return info;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -207,7 +230,6 @@ int numbt_solve(moonbit_bytes_t a, moonbit_bytes_t b, int n) {
 // vt: n x n matrix (output, V transposed)
 // Returns 0 on success
 int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_bytes_t vt, int m, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   float* U = (float*)u;
   float* S = (float*)s;
@@ -272,9 +294,6 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
   free(work);
   free(A_col);
   return info;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -286,7 +305,6 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
 // w: n eigenvalues (output)
 // Returns 0 on success
 int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   float* W = (float*)w;
 
@@ -326,9 +344,6 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
 
   free(work);
   return info;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -339,7 +354,6 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
 // a: n x n positive definite matrix (input, L on output in lower triangle)
 // Returns 0 on success, >0 if not positive definite
 int numbt_cholesky(moonbit_bytes_t a, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
 
   int info;
@@ -375,9 +389,6 @@ int numbt_cholesky(moonbit_bytes_t a, int n) {
   }
 
   return info;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -390,7 +401,6 @@ int numbt_cholesky(moonbit_bytes_t a, int n) {
 // r: m x n upper triangular matrix (output)
 // Returns 0 on success
 int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   float* Q = (float*)q;
   float* R = (float*)r;
@@ -461,9 +471,6 @@ int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int
   free(tau);
   free(A_col);
   return info;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -475,7 +482,6 @@ int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int
 // det: determinant (output)
 // Returns 0 on success
 int numbt_det(moonbit_bytes_t a, float* det, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   int* ipiv = (int*)malloc(n * sizeof(int));
   if (!ipiv) return -1;
@@ -512,9 +518,6 @@ int numbt_det(moonbit_bytes_t a, float* det, int n) {
 
   free(ipiv);
   return 0;
-#else
-  return -1;
-#endif
 }
 
 // ============================================================================
@@ -526,7 +529,6 @@ int numbt_det(moonbit_bytes_t a, float* det, int n) {
 // b: m vector (input, solution x on output for first n elements)
 // Returns 0 on success
 int numbt_lstsq(moonbit_bytes_t a, moonbit_bytes_t b, int m, int n) {
-#ifdef __APPLE__
   float* A = (float*)a;
   float* B = (float*)b;
 
@@ -564,7 +566,4 @@ int numbt_lstsq(moonbit_bytes_t a, moonbit_bytes_t b, int m, int n) {
   free(work);
   free(A_col);
   return info;
-#else
-  return -1;
-#endif
 }
