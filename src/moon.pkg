@@ -5,8 +5,8 @@ import {
 
 options(
   // Link flags must be provided by the consuming package:
-  // macOS: "-framework Accelerate"
-  // Linux: "-lopenblas -lm" (requires libopenblas-dev liblapack-dev)
+  // macOS: "-framework Accelerate" (fully supported)
+  // Linux: "-lopenblas -lm" (experimental - LAPACK tests may have issues)
   "native-stub": [ "numbt_stub.c" ],
   "supported-targets": [ "native" ],
 )
