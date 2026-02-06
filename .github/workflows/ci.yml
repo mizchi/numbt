@@ -35,8 +35,14 @@ jobs:
       - name: Configure blas dependency link flags (Linux)
         if: runner.os == 'Linux'
         run: |
-          find .mooncakes -name "moon.pkg" -exec sed -i 's|-framework Accelerate|-lopenblas -llapack -lm|g' {} \;
-          find .mooncakes -name "moon.pkg" -exec cat {} \;
+          ls -la
+          if [ -d .mooncakes ]; then
+            find .mooncakes -name "moon.pkg" -exec sed -i 's|-framework Accelerate|-lopenblas -llapack -lm|g' {} \;
+            find .mooncakes -name "moon.pkg" -exec cat {} \;
+          else
+            echo "No .mooncakes directory found, checking ~/.moon/registry"
+            find ~/.moon/registry -name "moon.pkg" -path "*blas*" -exec sed -i 's|-framework Accelerate|-lopenblas -llapack -lm|g' {} \; 2>/dev/null || true
+          fi
       - name: Moon check
         run: moon check --target native
       - name: Moon test
