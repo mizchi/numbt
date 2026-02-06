@@ -8,12 +8,23 @@ on:
 
 jobs:
   test:
-    # Linux support is experimental - LAPACK tests crash with SIGABRT
-    # For now, only run on macOS where everything works
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            link-flags: "-framework Accelerate"
+          - os: ubuntu-latest
+            link-flags: "-lopenblas -llapack -lm"
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install BLAS/LAPACK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev liblapack-dev
       - name: Configure link flags
         run: |
           cat > src/moon.pkg << EOF
@@ -22,7 +33,7 @@ jobs:
             "moonbitlang/core/math" as @math,
           }
           options(
-            link: { "native": { "cc-link-flags": "-framework Accelerate" } },
+            link: { "native": { "cc-link-flags": "${{ matrix.link-flags }}" } },
             "native-stub": [ "numbt_stub.c" ],
             "supported-targets": [ "native" ],
           )

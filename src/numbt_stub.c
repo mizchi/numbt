@@ -521,10 +521,19 @@ int numbt_det(moonbit_bytes_t a, float* det, int n) {
 
   // LU factorization
   sgetrf_(&N, &N, A, &lda, ipiv, &info);
-  if (info != 0) {
+
+  // info > 0 means matrix is singular (U(i,i) = 0), determinant is 0
+  // This is not an error, just a valid result (det = 0)
+  if (info > 0) {
     free(ipiv);
     *det = 0.0f;
-    return info;
+    return 0;  // Return success since det=0 is a valid result
+  }
+  // info < 0 means argument error
+  if (info < 0) {
+    free(ipiv);
+    *det = 0.0f;
+    return info;  // Return error code
   }
 
   // Compute determinant from diagonal of U

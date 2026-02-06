@@ -4,9 +4,7 @@ import {
 }
 
 options(
-  // Link flags must be provided by the consuming package:
-  // macOS: "-framework Accelerate" (fully supported)
-  // Linux: "-lopenblas -lm" (experimental - LAPACK tests may have issues)
+  link: { "native": { "cc-link-flags": "-framework Accelerate" } },
   "native-stub": [ "numbt_stub.c" ],
   "supported-targets": [ "native" ],
 )
