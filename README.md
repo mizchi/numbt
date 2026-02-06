@@ -17,7 +17,7 @@ Built on BLAS (Apple Accelerate framework on macOS) for high-performance matrix 
 - MoonBit native backend
 - BLAS/LAPACK library:
   - **macOS**: Apple Accelerate (built-in)
-  - **Linux**: OpenBLAS (`sudo apt-get install libopenblas-dev liblapack-dev`)
+  - **Linux**: OpenBLAS (`sudo apt-get install libopenblas-dev liblapack-dev liblapacke-dev`)
 
 ## Platform Configuration
 
@@ -33,7 +33,7 @@ options(
 **Linux:**
 ```
 options(
-  link: { "native": { "cc-link-flags": "-lopenblas -llapack -lm" } },
+  link: { "native": { "cc-link-flags": "-lopenblas -llapack -llapacke -lm" } },
 )
 ```
 
