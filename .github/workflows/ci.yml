@@ -12,19 +12,22 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            link-flags: "-framework Accelerate"
+            link-flags: ""
           - os: ubuntu-latest
             link-flags: "-lopenblas -llapack -lm"
     runs-on: ${{ matrix.os }}
+    env:
+      MOON_CC_LINK_FLAGS: ${{ matrix.link-flags }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install OpenBLAS and LAPACK (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
-      - name: Configure link flags
+      - name: Configure link flags (Linux)
+        if: runner.os == 'Linux'
         run: |
-          sed -i.bak 's|-framework Accelerate|${{ matrix.link-flags }}|' src/moon.pkg
+          sed -i.bak 's|-framework Accelerate|-lopenblas -llapack -lm|' src/moon.pkg
           cat src/moon.pkg
       - name: Install MoonBit CLI
         run: |
@@ -32,20 +35,6 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Moon update
         run: moon update
-      - name: Moon check (downloads deps)
-        run: moon check --target native || true
-      - name: Configure blas dependency link flags (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          echo "=== Patching moon.pkg files in ~/.moon/registry ==="
-          find ~/.moon/registry -name "moon.pkg" -exec grep -l "Accelerate" {} \; 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            sed -i 's|-framework Accelerate|-lopenblas -llapack -lm|g' "$f"
-            cat "$f"
-          done
-      - name: Clean and rebuild
-        if: runner.os == 'Linux'
-        run: rm -rf _build .mooncakes
       - name: Moon check
         run: moon check --target native
       - name: Moon test
