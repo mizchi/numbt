@@ -14,14 +14,14 @@ jobs:
           - os: macos-latest
             link-flags: "-framework Accelerate"
           - os: ubuntu-latest
-            link-flags: "-lopenblas"
+            link-flags: "-lopenblas -llapack -lm"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install OpenBLAS (Linux)
+      - name: Install OpenBLAS and LAPACK (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
       - name: Configure link flags
         run: |
           sed -i.bak 's|-framework Accelerate|${{ matrix.link-flags }}|' src/moon.pkg
