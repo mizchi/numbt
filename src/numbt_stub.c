@@ -1,6 +1,6 @@
 // numbt native acceleration using BLAS/LAPACK
 // macOS: Apple Accelerate framework
-// Linux: OpenBLAS + LAPACKE (C interface)
+// Linux: OpenBLAS + LAPACK (Fortran interface)
 
 #include <stdint.h>
 #include <string.h>
@@ -11,10 +11,18 @@
 #ifdef __APPLE__
   #define ACCELERATE_NEW_LAPACK
   #include <Accelerate/Accelerate.h>
-  typedef __LAPACK_int lapack_int;
 #else
   #include <cblas.h>
-  #include <lapacke.h>
+  // LAPACK function declarations (Fortran interface with trailing underscore)
+  extern void sgetrf_(int* m, int* n, float* a, int* lda, int* ipiv, int* info);
+  extern void sgetri_(int* n, float* a, int* lda, int* ipiv, float* work, int* lwork, int* info);
+  extern void sgesv_(int* n, int* nrhs, float* a, int* lda, int* ipiv, float* b, int* ldb, int* info);
+  extern void sgesvd_(char* jobu, char* jobvt, int* m, int* n, float* a, int* lda, float* s, float* u, int* ldu, float* vt, int* ldvt, float* work, int* lwork, int* info);
+  extern void ssyev_(char* jobz, char* uplo, int* n, float* a, int* lda, float* w, float* work, int* lwork, int* info);
+  extern void spotrf_(char* uplo, int* n, float* a, int* lda, int* info);
+  extern void sgeqrf_(int* m, int* n, float* a, int* lda, float* tau, float* work, int* lwork, int* info);
+  extern void sorgqr_(int* m, int* n, int* k, float* a, int* lda, float* tau, float* work, int* lwork, int* info);
+  extern void sgels_(char* trans, int* m, int* n, int* nrhs, float* a, int* lda, float* b, int* ldb, float* work, int* lwork, int* info);
 #endif
 
 typedef uint8_t *moonbit_bytes_t;
@@ -151,13 +159,21 @@ void numbt_shuffle_indices(int* indices, int n) {
 // Returns 0 on success, non-zero on failure (singular matrix)
 int numbt_inv(moonbit_bytes_t a, int n) {
   float* A = (float*)a;
-  lapack_int* ipiv = (lapack_int*)malloc(n * sizeof(lapack_int));
+  int* ipiv = (int*)malloc(n * sizeof(int));
   if (!ipiv) return -1;
 
-#ifdef __APPLE__
   int info;
   int N = n;
   int lda = n;
+
+  // LAPACK uses column-major, so transpose A in place for row-major input
+  for (int i = 0; i < n; i++) {
+    for (int j = i + 1; j < n; j++) {
+      float tmp = A[i * n + j];
+      A[i * n + j] = A[j * n + i];
+      A[j * n + i] = tmp;
+    }
+  }
 
   // LU factorization
   sgetrf_(&N, &N, A, &lda, ipiv, &info);
@@ -176,20 +192,18 @@ int numbt_inv(moonbit_bytes_t a, int n) {
 
   sgetri_(&N, A, &lda, ipiv, work, &lwork, &info);
 
+  // Transpose back to row-major
+  for (int i = 0; i < n; i++) {
+    for (int j = i + 1; j < n; j++) {
+      float tmp = A[i * n + j];
+      A[i * n + j] = A[j * n + i];
+      A[j * n + i] = tmp;
+    }
+  }
+
   free(work);
   free(ipiv);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_sgetrf(LAPACK_ROW_MAJOR, n, n, A, n, ipiv);
-  if (info != 0) {
-    free(ipiv);
-    return info;
-  }
-  info = LAPACKE_sgetri(LAPACK_ROW_MAJOR, n, A, n, ipiv);
-  free(ipiv);
-  return info;
-#endif
 }
 
 // Solve linear system: A @ x = b
@@ -199,10 +213,9 @@ int numbt_inv(moonbit_bytes_t a, int n) {
 int numbt_solve(moonbit_bytes_t a, moonbit_bytes_t b, int n) {
   float* A = (float*)a;
   float* B = (float*)b;
-  lapack_int* ipiv = (lapack_int*)malloc(n * sizeof(lapack_int));
+  int* ipiv = (int*)malloc(n * sizeof(int));
   if (!ipiv) return -1;
 
-#ifdef __APPLE__
   int info;
   int N = n;
   int nrhs = 1;
@@ -222,12 +235,6 @@ int numbt_solve(moonbit_bytes_t a, moonbit_bytes_t b, int n) {
 
   free(ipiv);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_sgesv(LAPACK_ROW_MAJOR, n, 1, A, n, ipiv, B, 1);
-  free(ipiv);
-  return info;
-#endif
 }
 
 // ============================================================================
@@ -245,12 +252,11 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
   float* U = (float*)u;
   float* S = (float*)s;
   float* VT = (float*)vt;
-  int minmn = m < n ? m : n;
 
-#ifdef __APPLE__
   int info;
   int M = m;
   int N = n;
+  int minmn = m < n ? m : n;
 
   // Transpose A for column-major LAPACK
   float* A_col = (float*)malloc(m * n * sizeof(float));
@@ -264,7 +270,9 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
   // Query optimal workspace size
   int lwork = -1;
   float work_query;
-  sgesvd_("A", "A", &M, &N, A_col, &M, S, U, &M, VT, &N, &work_query, &lwork, &info);
+  char jobu = 'A';
+  char jobvt = 'A';
+  sgesvd_(&jobu, &jobvt, &M, &N, A_col, &M, S, U, &M, VT, &N, &work_query, &lwork, &info);
 
   lwork = (int)work_query;
   float* work = (float*)malloc(lwork * sizeof(float));
@@ -274,7 +282,7 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
   }
 
   // Compute SVD
-  sgesvd_("A", "A", &M, &N, A_col, &M, S, U, &M, VT, &N, work, &lwork, &info);
+  sgesvd_(&jobu, &jobvt, &M, &N, A_col, &M, S, U, &M, VT, &N, work, &lwork, &info);
 
   // Transpose U back to row-major
   float* U_tmp = (float*)malloc(m * m * sizeof(float));
@@ -303,14 +311,6 @@ int numbt_svd(moonbit_bytes_t a, moonbit_bytes_t u, moonbit_bytes_t s, moonbit_b
   free(work);
   free(A_col);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  float* superb = (float*)malloc((minmn - 1) * sizeof(float));
-  if (!superb) return -1;
-  lapack_int info = LAPACKE_sgesvd(LAPACK_ROW_MAJOR, 'A', 'A', m, n, A, n, S, U, m, VT, n, superb);
-  free(superb);
-  return info;
-#endif
 }
 
 // ============================================================================
@@ -325,7 +325,6 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
   float* A = (float*)a;
   float* W = (float*)w;
 
-#ifdef __APPLE__
   int info;
   int N = n;
   int lda = n;
@@ -342,14 +341,16 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
   // Query optimal workspace size
   int lwork = -1;
   float work_query;
-  ssyev_("V", "U", &N, A, &lda, W, &work_query, &lwork, &info);
+  char jobz = 'V';
+  char uplo = 'U';
+  ssyev_(&jobz, &uplo, &N, A, &lda, W, &work_query, &lwork, &info);
 
   lwork = (int)work_query;
   float* work = (float*)malloc(lwork * sizeof(float));
   if (!work) return -1;
 
   // Compute eigenvalues and eigenvectors
-  ssyev_("V", "U", &N, A, &lda, W, work, &lwork, &info);
+  ssyev_(&jobz, &uplo, &N, A, &lda, W, work, &lwork, &info);
 
   // Transpose A back to row-major (eigenvectors are in columns)
   for (int i = 0; i < n; i++) {
@@ -362,11 +363,6 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
 
   free(work);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_ssyev(LAPACK_ROW_MAJOR, 'V', 'U', n, A, n, W);
-  return info;
-#endif
 }
 
 // ============================================================================
@@ -379,7 +375,6 @@ int numbt_eig_symmetric(moonbit_bytes_t a, moonbit_bytes_t w, int n) {
 int numbt_cholesky(moonbit_bytes_t a, int n) {
   float* A = (float*)a;
 
-#ifdef __APPLE__
   int info;
   int N = n;
   int lda = n;
@@ -394,7 +389,8 @@ int numbt_cholesky(moonbit_bytes_t a, int n) {
   }
 
   // Compute Cholesky decomposition (lower triangular)
-  spotrf_("L", &N, A, &lda, &info);
+  char uplo = 'L';
+  spotrf_(&uplo, &N, A, &lda, &info);
 
   // Transpose back to row-major
   for (int i = 0; i < n; i++) {
@@ -413,19 +409,6 @@ int numbt_cholesky(moonbit_bytes_t a, int n) {
   }
 
   return info;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_spotrf(LAPACK_ROW_MAJOR, 'L', n, A, n);
-
-  // Zero out upper triangle (Cholesky returns lower)
-  for (int i = 0; i < n; i++) {
-    for (int j = i + 1; j < n; j++) {
-      A[i * n + j] = 0.0f;
-    }
-  }
-
-  return info;
-#endif
 }
 
 // ============================================================================
@@ -441,13 +424,12 @@ int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int
   float* A = (float*)a;
   float* Q = (float*)q;
   float* R = (float*)r;
-  int minmn = m < n ? m : n;
 
-#ifdef __APPLE__
   int info;
   int M = m;
   int N = n;
   int lda = m;
+  int minmn = m < n ? m : n;
 
   // Transpose A for column-major LAPACK
   float* A_col = (float*)malloc(m * n * sizeof(float));
@@ -509,49 +491,6 @@ int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int
   free(tau);
   free(A_col);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  float* tau = (float*)malloc(minmn * sizeof(float));
-  if (!tau) return -1;
-
-  // Copy A to a work array (will be modified)
-  float* A_work = (float*)malloc(m * n * sizeof(float));
-  if (!A_work) {
-    free(tau);
-    return -1;
-  }
-  memcpy(A_work, A, m * n * sizeof(float));
-
-  // Compute QR factorization
-  lapack_int info = LAPACKE_sgeqrf(LAPACK_ROW_MAJOR, m, n, A_work, n, tau);
-  if (info != 0) {
-    free(A_work);
-    free(tau);
-    return info;
-  }
-
-  // Extract R (upper triangular)
-  memset(R, 0, m * n * sizeof(float));
-  for (int i = 0; i < minmn; i++) {
-    for (int j = i; j < n; j++) {
-      R[i * n + j] = A_work[i * n + j];
-    }
-  }
-
-  // Generate Q
-  info = LAPACKE_sorgqr(LAPACK_ROW_MAJOR, m, m, minmn, A_work, n, tau);
-
-  // Copy Q (only first m columns matter for full Q)
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < m; j++) {
-      Q[i * m + j] = (j < n) ? A_work[i * n + j] : 0.0f;
-    }
-  }
-
-  free(A_work);
-  free(tau);
-  return info;
-#endif
 }
 
 // ============================================================================
@@ -564,10 +503,9 @@ int numbt_qr(moonbit_bytes_t a, moonbit_bytes_t q, moonbit_bytes_t r, int m, int
 // Returns 0 on success
 int numbt_det(moonbit_bytes_t a, float* det, int n) {
   float* A = (float*)a;
-  lapack_int* ipiv = (lapack_int*)malloc(n * sizeof(lapack_int));
+  int* ipiv = (int*)malloc(n * sizeof(int));
   if (!ipiv) return -1;
 
-#ifdef __APPLE__
   int info;
   int N = n;
   int lda = n;
@@ -600,27 +538,6 @@ int numbt_det(moonbit_bytes_t a, float* det, int n) {
 
   free(ipiv);
   return 0;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_sgetrf(LAPACK_ROW_MAJOR, n, n, A, n, ipiv);
-  if (info != 0) {
-    free(ipiv);
-    *det = 0.0f;
-    return info;
-  }
-
-  // Compute determinant from diagonal of U
-  float d = 1.0f;
-  int sign = 1;
-  for (int i = 0; i < n; i++) {
-    d *= A[i * n + i];  // diagonal element
-    if (ipiv[i] != i + 1) sign = -sign;  // permutation sign
-  }
-  *det = d * sign;
-
-  free(ipiv);
-  return 0;
-#endif
 }
 
 // ============================================================================
@@ -635,7 +552,6 @@ int numbt_lstsq(moonbit_bytes_t a, moonbit_bytes_t b, int m, int n) {
   float* A = (float*)a;
   float* B = (float*)b;
 
-#ifdef __APPLE__
   int info;
   int M = m;
   int N = n;
@@ -655,7 +571,8 @@ int numbt_lstsq(moonbit_bytes_t a, moonbit_bytes_t b, int m, int n) {
   // Query optimal workspace size
   int lwork = -1;
   float work_query;
-  sgels_("N", &M, &N, &nrhs, A_col, &lda, B, &ldb, &work_query, &lwork, &info);
+  char trans = 'N';
+  sgels_(&trans, &M, &N, &nrhs, A_col, &lda, B, &ldb, &work_query, &lwork, &info);
 
   lwork = (int)work_query;
   float* work = (float*)malloc(lwork * sizeof(float));
@@ -665,14 +582,9 @@ int numbt_lstsq(moonbit_bytes_t a, moonbit_bytes_t b, int m, int n) {
   }
 
   // Solve least squares
-  sgels_("N", &M, &N, &nrhs, A_col, &lda, B, &ldb, work, &lwork, &info);
+  sgels_(&trans, &M, &N, &nrhs, A_col, &lda, B, &ldb, work, &lwork, &info);
 
   free(work);
   free(A_col);
   return info;
-#else
-  // LAPACKE handles row-major directly
-  lapack_int info = LAPACKE_sgels(LAPACK_ROW_MAJOR, 'N', m, n, 1, A, n, B, 1);
-  return info;
-#endif
 }
