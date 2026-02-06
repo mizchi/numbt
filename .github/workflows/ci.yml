@@ -8,10 +8,34 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            link-flags: "-framework Accelerate"
+          - os: ubuntu-latest
+            link-flags: "-lopenblas -llapack -lm"
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install OpenBLAS and LAPACK (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
+      - name: Configure link flags
+        run: |
+          cat > src/moon.pkg << EOF
+          import {
+            "mizchi/blas" as @blas,
+            "moonbitlang/core/math" as @math,
+          }
+          options(
+            link: { "native": { "cc-link-flags": "${{ matrix.link-flags }}" } },
+            "native-stub": [ "numbt_stub.c" ],
+            "supported-targets": [ "native" ],
+          )
+          EOF
+          cat src/moon.pkg
       - name: Install MoonBit CLI
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
