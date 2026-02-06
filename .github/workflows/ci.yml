@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Install OpenBLAS and LAPACK (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev liblapacke-dev
       - name: Configure link flags
         run: |
           cat > src/moon.pkg << EOF
