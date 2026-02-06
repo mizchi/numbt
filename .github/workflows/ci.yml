@@ -32,6 +32,11 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Moon update
         run: moon update
+      - name: Configure blas dependency link flags (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          find .mooncakes -name "moon.pkg" -exec sed -i 's|-framework Accelerate|-lopenblas -llapack -lm|g' {} \;
+          find .mooncakes -name "moon.pkg" -exec cat {} \;
       - name: Moon check
         run: moon check --target native
       - name: Moon test
