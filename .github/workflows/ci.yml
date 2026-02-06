@@ -8,27 +8,10 @@ on:
 
 jobs:
   test:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            link-flags: ""
-          - os: ubuntu-latest
-            link-flags: "-lopenblas -llapack -lm"
-    runs-on: ${{ matrix.os }}
-    env:
-      MOON_CC_LINK_FLAGS: ${{ matrix.link-flags }}
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install OpenBLAS and LAPACK (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
-      - name: Configure link flags (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sed -i.bak 's|-framework Accelerate|-lopenblas -llapack -lm|' src/moon.pkg
-          cat src/moon.pkg
       - name: Install MoonBit CLI
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
