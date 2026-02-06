@@ -33,7 +33,7 @@ options(
 **Linux:**
 ```
 options(
-  link: { "native": { "cc-link-flags": "-lopenblas -llapack -lm" } },
+  link: { "native": { "cc-link-flags": "-lopenblas -lm" } },
 )
 ```
 

@@ -14,7 +14,7 @@ jobs:
           - os: macos-latest
             link-flags: "-framework Accelerate"
           - os: ubuntu-latest
-            link-flags: "-lopenblas -llapack -lm"
+            link-flags: "-lopenblas -lm"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
