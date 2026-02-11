@@ -1,6 +1,6 @@
 import {
-  "mizchi/blas" as @blas,
-  "moonbitlang/core/math" as @math,
+  "mizchi/blas" @blas,
+  "moonbitlang/core/math" @math,
 }
 
 options(
