@@ -3,12 +3,15 @@
 // ============================================================================
 
 ///|
+#borrow(data)
 extern "C" fn numbt_vsort_asc(data : FixedArray[Byte], n : Int) -> Unit = "numbt_vsort_asc"
 
 ///|
+#borrow(data)
 extern "C" fn numbt_vsort_desc(data : FixedArray[Byte], n : Int) -> Unit = "numbt_vsort_desc"
 
 ///|
+#borrow(src, dst)
 extern "C" fn numbt_vexp(
   src : FixedArray[Byte],
   dst : FixedArray[Byte],
@@ -16,6 +19,7 @@ extern "C" fn numbt_vexp(
 ) -> Unit = "numbt_vexp"
 
 ///|
+#borrow(a, b, out)
 extern "C" fn numbt_outer(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
@@ -28,15 +32,19 @@ extern "C" fn numbt_outer(
 extern "C" fn numbt_seed(seed : Int) -> Unit = "numbt_seed"
 
 ///|
+#borrow(out)
 extern "C" fn numbt_rand(out : FixedArray[Byte], n : Int) -> Unit = "numbt_rand"
 
 ///|
+#borrow(out)
 extern "C" fn numbt_randn(out : FixedArray[Byte], n : Int) -> Unit = "numbt_randn"
 
 ///|
+#borrow(a)
 extern "C" fn numbt_inv(a : FixedArray[Byte], n : Int) -> Int = "numbt_inv"
 
 ///|
+#borrow(a, b)
 extern "C" fn numbt_solve(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
@@ -44,6 +52,7 @@ extern "C" fn numbt_solve(
 ) -> Int = "numbt_solve"
 
 ///|
+#borrow(a, u, s, vt)
 extern "C" fn numbt_svd(
   a : FixedArray[Byte],
   u : FixedArray[Byte],
@@ -54,6 +63,7 @@ extern "C" fn numbt_svd(
 ) -> Int = "numbt_svd"
 
 ///|
+#borrow(a, w)
 extern "C" fn numbt_eig_symmetric(
   a : FixedArray[Byte],
   w : FixedArray[Byte],
@@ -61,9 +71,11 @@ extern "C" fn numbt_eig_symmetric(
 ) -> Int = "numbt_eig_symmetric"
 
 ///|
+#borrow(a)
 extern "C" fn numbt_cholesky(a : FixedArray[Byte], n : Int) -> Int = "numbt_cholesky"
 
 ///|
+#borrow(a, q, r)
 extern "C" fn numbt_qr(
   a : FixedArray[Byte],
   q : FixedArray[Byte],
@@ -73,6 +85,7 @@ extern "C" fn numbt_qr(
 ) -> Int = "numbt_qr"
 
 ///|
+#borrow(a, det)
 extern "C" fn numbt_det(
   a : FixedArray[Byte],
   det : FixedArray[Byte],
@@ -80,6 +93,7 @@ extern "C" fn numbt_det(
 ) -> Int = "numbt_det"
 
 ///|
+#borrow(a, b)
 extern "C" fn numbt_lstsq(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
@@ -212,6 +226,7 @@ pub fn fmat_randn(rows : Int, cols : Int) -> LapackMat {
 
 ///|
 /// LapackMat matrix multiply using BLAS (C = A @ B)
+#borrow(a, b, c)
 extern "C" fn numbt_sgemm(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
