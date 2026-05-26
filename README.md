@@ -94,8 +94,31 @@ let probs = @numbt.vec_view(Array::make(3, 0.0), 0, 3)
 
 ### LAPACK (LapackMat)
 
-- `lapack_mat_new(rows, cols)` - Create a new matrix
-- `lapack_mat_svd(mat)` - SVD decomposition
+`LapackMat` is the `FixedArray[Byte]`-backed matrix type. Its raw byte
+layout matches what BLAS / LAPACK / vDSP expect, so calls into the
+native side are zero-copy.
+
+- `fmat_zeros(rows, cols)` / `fmat_eye(n)` / `fmat_randn(rows, cols)` - constructors
+- `fmat_from_mat(m)` / `fmat_to_mat(fm)` - conversion to / from `Mat`
+- `fmat_matmul(a, b)` - BLAS sgemm (matrix multiply)
+- `fmat_svd` / `fmat_eig` / `fmat_cholesky` / `fmat_qr` / `fmat_det` / `fmat_lstsq` - LAPACK
+- `fmat_inv` / `fmat_solve` - LU-based linear solve
+
+### LapackMat: Accelerate vDSP element-wise + reductions (SIMD)
+
+Zero-copy SIMD via Apple Accelerate's vDSP. ~10-30x faster than the
+equivalent scalar implementation on the same storage:
+
+- `fmat_add` / `fmat_sub` / `fmat_mul` / `fmat_div` - element-wise binary ops
+- `fmat_add_into` / etc. - in-place variants (no allocation)
+- `fmat_add_scalar` / `fmat_mul_scalar` - broadcast scalar ops
+- `fmat_sum` / `fmat_mean` / `fmat_max` / `fmat_min` - reductions
+
+Note: the equivalent ops on the `Array[Float]`-backed `Vec` / `Mat`
+types stay scalar by default. MoonBit's C FFI requires the buffer to
+be `FixedArray[Byte]`, and the `Array[Float]` -> bytes round-trip cost
+erases the SIMD win even at N = 1M+. For hot inner loops, convert
+once with `fmat_from_mat` and stay on `LapackMat`.
 
 ## License
 

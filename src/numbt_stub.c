@@ -85,6 +85,132 @@ void numbt_vexp(moonbit_bytes_t src, moonbit_bytes_t dst, int n) {
 }
 
 // ============================================================================
+// Element-wise vector ops via vDSP (Apple) / cblas (Linux)
+// ============================================================================
+//
+// All take row-major float32 buffers. n is element count, not byte count.
+// On macOS these dispatch to Accelerate's SIMD (NEON / AMX) implementations.
+
+void numbt_vadd(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  vDSP_vadd((const float*)a, 1, (const float*)b, 1, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fa = (float*)a;
+  float* fb = (float*)b;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fa[i] + fb[i];
+#endif
+}
+
+void numbt_vsub(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  // vDSP_vsub: out = b - a. To get a - b we swap operands.
+  vDSP_vsub((const float*)b, 1, (const float*)a, 1, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fa = (float*)a;
+  float* fb = (float*)b;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fa[i] - fb[i];
+#endif
+}
+
+void numbt_vmul(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  vDSP_vmul((const float*)a, 1, (const float*)b, 1, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fa = (float*)a;
+  float* fb = (float*)b;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fa[i] * fb[i];
+#endif
+}
+
+void numbt_vdiv(moonbit_bytes_t a, moonbit_bytes_t b, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  // vDSP_vdiv: out = a / b. Note Accelerate's signature is (B, A, out) = A/B,
+  // we want a/b so pass b as the divisor (first), a as numerator (second).
+  vDSP_vdiv((const float*)b, 1, (const float*)a, 1, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fa = (float*)a;
+  float* fb = (float*)b;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fa[i] / fb[i];
+#endif
+}
+
+// out = x + scalar (broadcast)
+void numbt_vsadd(moonbit_bytes_t x, float scalar, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  vDSP_vsadd((const float*)x, 1, &scalar, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fx[i] + scalar;
+#endif
+}
+
+// out = x * scalar (broadcast)
+void numbt_vsmul(moonbit_bytes_t x, float scalar, moonbit_bytes_t out, int n) {
+#ifdef __APPLE__
+  vDSP_vsmul((const float*)x, 1, &scalar, (float*)out, 1, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  float* fout = (float*)out;
+  for (int i = 0; i < n; i++) fout[i] = fx[i] * scalar;
+#endif
+}
+
+// Reductions: return scalar via float* out_ptr (4 bytes)
+void numbt_vsve(moonbit_bytes_t x, moonbit_bytes_t out_ptr, int n) {
+  float result;
+#ifdef __APPLE__
+  vDSP_sve((const float*)x, 1, &result, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  result = 0.0f;
+  for (int i = 0; i < n; i++) result += fx[i];
+#endif
+  *((float*)out_ptr) = result;
+}
+
+void numbt_vmeanv(moonbit_bytes_t x, moonbit_bytes_t out_ptr, int n) {
+  float result;
+#ifdef __APPLE__
+  vDSP_meanv((const float*)x, 1, &result, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  float sum = 0.0f;
+  for (int i = 0; i < n; i++) sum += fx[i];
+  result = sum / (float)n;
+#endif
+  *((float*)out_ptr) = result;
+}
+
+void numbt_vmaxv(moonbit_bytes_t x, moonbit_bytes_t out_ptr, int n) {
+  float result;
+#ifdef __APPLE__
+  vDSP_maxv((const float*)x, 1, &result, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  result = fx[0];
+  for (int i = 1; i < n; i++) if (fx[i] > result) result = fx[i];
+#endif
+  *((float*)out_ptr) = result;
+}
+
+void numbt_vminv(moonbit_bytes_t x, moonbit_bytes_t out_ptr, int n) {
+  float result;
+#ifdef __APPLE__
+  vDSP_minv((const float*)x, 1, &result, (vDSP_Length)n);
+#else
+  float* fx = (float*)x;
+  result = fx[0];
+  for (int i = 1; i < n; i++) if (fx[i] < result) result = fx[i];
+#endif
+  *((float*)out_ptr) = result;
+}
+
+// ============================================================================
 // Outer product using BLAS sger
 // ============================================================================
 

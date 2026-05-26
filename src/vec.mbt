@@ -247,32 +247,152 @@ pub fn fmat_matmul(a : LapackMat, b : LapackMat) -> LapackMat {
 }
 
 ///|
-/// LapackMat add (C = A + B)
+/// LapackMat add (C = A + B), backed by Accelerate vDSP_vadd.
+/// Zero-copy: FixedArray[Byte] storage is passed directly to the SIMD path.
 pub fn fmat_add(a : LapackMat, b : LapackMat) -> LapackMat {
   if a.rows != b.rows || a.cols != b.cols {
     panic()
   }
   let c = fmat_zeros(a.rows, a.cols)
-  let n = a.rows * a.cols
-  for i = 0; i < n; i = i + 1 {
-    let idx = i * 4
-    let a_bits = a.data[idx].to_int() |
-      (a.data[idx + 1].to_int() << 8) |
-      (a.data[idx + 2].to_int() << 16) |
-      (a.data[idx + 3].to_int() << 24)
-    let b_bits = b.data[idx].to_int() |
-      (b.data[idx + 1].to_int() << 8) |
-      (b.data[idx + 2].to_int() << 16) |
-      (b.data[idx + 3].to_int() << 24)
-    let sum = Float::reinterpret_from_int(a_bits) +
-      Float::reinterpret_from_int(b_bits)
-    let sum_bits = sum.reinterpret_as_int()
-    c.data[idx] = (sum_bits & 0xFF).to_byte()
-    c.data[idx + 1] = ((sum_bits >> 8) & 0xFF).to_byte()
-    c.data[idx + 2] = ((sum_bits >> 16) & 0xFF).to_byte()
-    c.data[idx + 3] = ((sum_bits >> 24) & 0xFF).to_byte()
-  }
+  numbt_vadd(a.data, b.data, c.data, a.rows * a.cols)
   c
+}
+
+///|
+/// In-place fmat add: out = a + b (zero allocation).
+pub fn fmat_add_into(a : LapackMat, b : LapackMat, out~ : LapackMat) -> Unit {
+  if a.rows != b.rows ||
+    a.cols != b.cols ||
+    out.rows != a.rows ||
+    out.cols != a.cols {
+    panic()
+  }
+  numbt_vadd(a.data, b.data, out.data, a.rows * a.cols)
+}
+
+///|
+/// LapackMat sub: C = A - B (Accelerate vDSP_vsub).
+pub fn fmat_sub(a : LapackMat, b : LapackMat) -> LapackMat {
+  if a.rows != b.rows || a.cols != b.cols {
+    panic()
+  }
+  let c = fmat_zeros(a.rows, a.cols)
+  numbt_vsub(a.data, b.data, c.data, a.rows * a.cols)
+  c
+}
+
+///|
+pub fn fmat_sub_into(a : LapackMat, b : LapackMat, out~ : LapackMat) -> Unit {
+  if a.rows != b.rows ||
+    a.cols != b.cols ||
+    out.rows != a.rows ||
+    out.cols != a.cols {
+    panic()
+  }
+  numbt_vsub(a.data, b.data, out.data, a.rows * a.cols)
+}
+
+///|
+/// LapackMat element-wise mul: C[i,j] = A[i,j] * B[i,j] (Accelerate vDSP_vmul).
+/// Not matrix-matrix multiply; for that use `fmat_matmul`.
+pub fn fmat_mul(a : LapackMat, b : LapackMat) -> LapackMat {
+  if a.rows != b.rows || a.cols != b.cols {
+    panic()
+  }
+  let c = fmat_zeros(a.rows, a.cols)
+  numbt_vmul(a.data, b.data, c.data, a.rows * a.cols)
+  c
+}
+
+///|
+pub fn fmat_mul_into(a : LapackMat, b : LapackMat, out~ : LapackMat) -> Unit {
+  if a.rows != b.rows ||
+    a.cols != b.cols ||
+    out.rows != a.rows ||
+    out.cols != a.cols {
+    panic()
+  }
+  numbt_vmul(a.data, b.data, out.data, a.rows * a.cols)
+}
+
+///|
+/// LapackMat element-wise div: C[i,j] = A[i,j] / B[i,j] (Accelerate vDSP_vdiv).
+pub fn fmat_div(a : LapackMat, b : LapackMat) -> LapackMat {
+  if a.rows != b.rows || a.cols != b.cols {
+    panic()
+  }
+  let c = fmat_zeros(a.rows, a.cols)
+  numbt_vdiv(a.data, b.data, c.data, a.rows * a.cols)
+  c
+}
+
+///|
+pub fn fmat_div_into(a : LapackMat, b : LapackMat, out~ : LapackMat) -> Unit {
+  if a.rows != b.rows ||
+    a.cols != b.cols ||
+    out.rows != a.rows ||
+    out.cols != a.cols {
+    panic()
+  }
+  numbt_vdiv(a.data, b.data, out.data, a.rows * a.cols)
+}
+
+///|
+/// Scalar add: out[i] = a[i] + scalar (Accelerate vDSP_vsadd).
+pub fn fmat_add_scalar(a : LapackMat, scalar : Float) -> LapackMat {
+  let c = fmat_zeros(a.rows, a.cols)
+  numbt_vsadd(a.data, scalar, c.data, a.rows * a.cols)
+  c
+}
+
+///|
+/// Scalar mul: out[i] = a[i] * scalar (Accelerate vDSP_vsmul).
+pub fn fmat_mul_scalar(a : LapackMat, scalar : Float) -> LapackMat {
+  let c = fmat_zeros(a.rows, a.cols)
+  numbt_vsmul(a.data, scalar, c.data, a.rows * a.cols)
+  c
+}
+
+///|
+/// Read a Float from a FixedArray[Byte] at byte offset.
+fn fmat_read_float(buf : FixedArray[Byte]) -> Float {
+  let bits = buf[0].to_int() |
+    (buf[1].to_int() << 8) |
+    (buf[2].to_int() << 16) |
+    (buf[3].to_int() << 24)
+  Float::reinterpret_from_int(bits)
+}
+
+///|
+/// Sum of all elements (Accelerate vDSP_sve).
+pub fn fmat_sum(a : LapackMat) -> Float {
+  let out : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  numbt_vsve(a.data, out, a.rows * a.cols)
+  fmat_read_float(out)
+}
+
+///|
+/// Mean of all elements (Accelerate vDSP_meanv).
+pub fn fmat_mean(a : LapackMat) -> Float {
+  let out : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  numbt_vmeanv(a.data, out, a.rows * a.cols)
+  fmat_read_float(out)
+}
+
+///|
+/// Max of all elements (Accelerate vDSP_maxv).
+pub fn fmat_max(a : LapackMat) -> Float {
+  let out : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  numbt_vmaxv(a.data, out, a.rows * a.cols)
+  fmat_read_float(out)
+}
+
+///|
+/// Min of all elements (Accelerate vDSP_minv).
+pub fn fmat_min(a : LapackMat) -> Float {
+  let out : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  numbt_vminv(a.data, out, a.rows * a.cols)
+  fmat_read_float(out)
 }
 
 ///|
