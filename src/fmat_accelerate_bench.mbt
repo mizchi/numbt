@@ -13,7 +13,7 @@ fn make_fmat(n : Int, seed : Int) -> LapackMat {
   let mut x = seed
   for i = 0; i < n * n; i = i + 1 {
     x = x * 1103515245 + 12345
-    arr[i] = ((x >> 16) & 0x7fff).to_float() / 32768.0
+    arr[i] = Float::from_int((x >> 16) & 0x7fff) / 32768.0
   }
   fmat_from_mat(mat_view(arr, n, n))
 }
@@ -62,7 +62,7 @@ fn fmat_sum_scalar_baseline(a : LapackMat) -> Float {
 
 ///|
 test "bench: fmat_add scalar (byte-decode) vs vDSP, 32x32 / 128x128 / 512x512" (
-  t : @bench.T
+  t : @bench.T,
 ) {
   let sizes = [32, 128, 512]
   for s = 0; s < sizes.length(); s = s + 1 {
@@ -71,18 +71,16 @@ test "bench: fmat_add scalar (byte-decode) vs vDSP, 32x32 / 128x128 / 512x512" (
     let fb = make_fmat(dim, 2)
     t.bench(name="fmat_add scalar   \{dim}x\{dim}", fn() {
       let _ = fmat_add_scalar_baseline(fa, fb)
-
     })
     t.bench(name="fmat_add vDSP     \{dim}x\{dim}", fn() {
       let _ = fmat_add(fa, fb)
-
     })
   }
 }
 
 ///|
 test "bench: fmat_sum scalar (byte-decode) vs vDSP, 32x32 / 128x128 / 512x512" (
-  t : @bench.T
+  t : @bench.T,
 ) {
   let sizes = [32, 128, 512]
   for s = 0; s < sizes.length(); s = s + 1 {
@@ -90,11 +88,9 @@ test "bench: fmat_sum scalar (byte-decode) vs vDSP, 32x32 / 128x128 / 512x512" (
     let fa = make_fmat(dim, 1)
     t.bench(name="fmat_sum scalar   \{dim}x\{dim}", fn() {
       let _ = fmat_sum_scalar_baseline(fa)
-
     })
     t.bench(name="fmat_sum vDSP     \{dim}x\{dim}", fn() {
       let _ = fmat_sum(fa)
-
     })
   }
 }
@@ -103,7 +99,7 @@ test "bench: fmat_sum scalar (byte-decode) vs vDSP, 32x32 / 128x128 / 512x512" (
 /// In-place variants: same as above but reuse a pre-allocated output buffer.
 /// This isolates pure compute time (no fmat_zeros allocation per call).
 test "bench: fmat_add_into in-place vDSP, 32x32 / 128x128 / 512x512" (
-  t : @bench.T
+  t : @bench.T,
 ) {
   let sizes = [32, 128, 512]
   for s = 0; s < sizes.length(); s = s + 1 {
@@ -112,7 +108,7 @@ test "bench: fmat_add_into in-place vDSP, 32x32 / 128x128 / 512x512" (
     let fb = make_fmat(dim, 2)
     let out = fmat_zeros(dim, dim)
     t.bench(name="fmat_add_into vDSP \{dim}x\{dim}", fn() {
-      fmat_add_into(fa, fb, out=out)
+      fmat_add_into(fa, fb, out~)
     })
   }
 }

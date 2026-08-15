@@ -1287,27 +1287,27 @@ pub fn mat_div(a : Mat, b : Mat) -> Mat {
 }
 
 ///|
-pub impl Add for Mat with add(self : Mat, other : Mat) -> Mat {
+pub impl Add for Mat with fn add(self : Mat, other : Mat) -> Mat {
   mat_add(self, other)
 }
 
 ///|
-pub impl Sub for Mat with sub(self : Mat, other : Mat) -> Mat {
+pub impl Sub for Mat with fn sub(self : Mat, other : Mat) -> Mat {
   mat_sub(self, other)
 }
 
 ///|
-pub impl Mul for Mat with mul(self : Mat, other : Mat) -> Mat {
+pub impl Mul for Mat with fn mul(self : Mat, other : Mat) -> Mat {
   mat_mul(self, other)
 }
 
 ///|
-pub impl Div for Mat with div(self : Mat, other : Mat) -> Mat {
+pub impl Div for Mat with fn div(self : Mat, other : Mat) -> Mat {
   mat_div(self, other)
 }
 
 ///|
-pub impl Neg for Mat with neg(self : Mat) -> Mat {
+pub impl Neg for Mat with fn neg(self : Mat) -> Mat {
   mat_neg(self)
 }
 
@@ -1717,27 +1717,27 @@ pub fn matmul_vec_bias_relu_into(
 }
 
 ///|
-pub impl Add for Vec with add(self : Vec, other : Vec) -> Vec {
+pub impl Add for Vec with fn add(self : Vec, other : Vec) -> Vec {
   vec_add(self, other)
 }
 
 ///|
-pub impl Sub for Vec with sub(self : Vec, other : Vec) -> Vec {
+pub impl Sub for Vec with fn sub(self : Vec, other : Vec) -> Vec {
   vec_sub(self, other)
 }
 
 ///|
-pub impl Mul for Vec with mul(self : Vec, other : Vec) -> Vec {
+pub impl Mul for Vec with fn mul(self : Vec, other : Vec) -> Vec {
   vec_mul(self, other)
 }
 
 ///|
-pub impl Div for Vec with div(self : Vec, other : Vec) -> Vec {
+pub impl Div for Vec with fn div(self : Vec, other : Vec) -> Vec {
   vec_div(self, other)
 }
 
 ///|
-pub impl Neg for Vec with neg(self : Vec) -> Vec {
+pub impl Neg for Vec with fn neg(self : Vec) -> Vec {
   vec_neg(self)
 }
 
