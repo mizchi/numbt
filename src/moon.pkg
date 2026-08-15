@@ -1,11 +1,12 @@
 import {
-  "mizchi/blas" @blas,
-  "moonbitlang/core/math" @math,
-  "moonbitlang/core/bench" @bench,
+  "mizchi/blas",
+  "moonbitlang/core/math",
+  "moonbitlang/core/bench",
 }
+
+supported_targets = "native"
 
 options(
   link: { "native": { "cc-link-flags": "-framework Accelerate" } },
   "native-stub": [ "numbt_stub.c" ],
-  "supported-targets": [ "native" ],
 )

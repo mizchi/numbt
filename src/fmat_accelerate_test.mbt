@@ -66,7 +66,7 @@ test "fmat_add_into in-place" {
   let fa = fmat_from_mat(a)
   let fb = fmat_from_mat(b)
   let out = fmat_zeros(2, 2)
-  fmat_add_into(fa, fb, out=out)
+  fmat_add_into(fa, fb, out~)
   let c = fmat_to_mat(out)
   assert_eq(mat_to_array(c), [11.0, 22.0, 33.0, 44.0])
 }
